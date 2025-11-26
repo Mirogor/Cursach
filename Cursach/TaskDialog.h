@@ -1,6 +1,7 @@
 #pragma once
-#include <windows.h>
+#include <memory>
 #include "Task.h"
+#include <windows.h>
 
 class TaskDialog {
 public:

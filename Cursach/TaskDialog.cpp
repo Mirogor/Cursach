@@ -1,30 +1,177 @@
 ﻿#include "TaskDialog.h"
 #include <windows.h>
-#include <windowsx.h>   // <-- добавлено для ComboBox_*
+#include <windowsx.h>     // ← ComboBox_ макросы
+#include <commctrl.h>
 #include <shobjidl.h>
 #include <filesystem>
-#include <string>
 #include "Logger.h"
 #include "resource.h"
-#include "utils.h"
+#include "Utils.h"
+
+#pragma comment(lib, "Comctl32.lib")
 
 using namespace std;
 
 static TaskPtr g_task;
 static bool g_isNew;
 
+//
+// simple show/hide helper
+//
+static void ShowCtrl(HWND hDlg, int id, bool show)
+{
+    HWND h = GetDlgItem(hDlg, id);
+    if (h) ShowWindow(h, show ? SW_SHOW : SW_HIDE);
+}
+
+//
+// TRIGGER UI
+//
+static void UpdateTriggerUI(HWND hDlg)
+{
+    int t = ComboBox_GetCurSel(GetDlgItem(hDlg, IDC_TASK_TRIGGER));
+
+    ShowCtrl(hDlg, IDC_TASK_INTERVAL, false);
+    ShowCtrl(hDlg, IDC_TASK_TIME, false);
+
+    ShowCtrl(hDlg, IDC_DAY_MON, false);
+    ShowCtrl(hDlg, IDC_DAY_TUE, false);
+    ShowCtrl(hDlg, IDC_DAY_WED, false);
+    ShowCtrl(hDlg, IDC_DAY_THU, false);
+    ShowCtrl(hDlg, IDC_DAY_FRI, false);
+    ShowCtrl(hDlg, IDC_DAY_SAT, false);
+    ShowCtrl(hDlg, IDC_DAY_SUN, false);
+
+    switch (t)
+    {
+    case (int)TriggerType::INTERVAL:
+        ShowCtrl(hDlg, IDC_TASK_INTERVAL, true);
+        break;
+
+    case (int)TriggerType::DAILY:
+        ShowCtrl(hDlg, IDC_TASK_TIME, true);
+        break;
+
+    case (int)TriggerType::WEEKLY:
+        ShowCtrl(hDlg, IDC_TASK_TIME, true);
+        ShowCtrl(hDlg, IDC_DAY_MON, true);
+        ShowCtrl(hDlg, IDC_DAY_TUE, true);
+        ShowCtrl(hDlg, IDC_DAY_WED, true);
+        ShowCtrl(hDlg, IDC_DAY_THU, true);
+        ShowCtrl(hDlg, IDC_DAY_FRI, true);
+        ShowCtrl(hDlg, IDC_DAY_SAT, true);
+        ShowCtrl(hDlg, IDC_DAY_SUN, true);
+        break;
+    }
+}
+
+//
+// TIME PICKER
+//
+static void LoadTime(HWND hDlg)
+{
+    SYSTEMTIME st{};
+    if (g_task->dailyHour >= 0)
+    {
+        st.wHour = g_task->dailyHour;
+        st.wMinute = g_task->dailyMinute;
+    }
+    else
+        GetLocalTime(&st);
+
+    DateTime_SetSystemtime(GetDlgItem(hDlg, IDC_TASK_TIME), GDT_VALID, &st);
+}
+
+static void SaveTime(HWND hDlg)
+{
+    SYSTEMTIME st{};
+    DateTime_GetSystemtime(GetDlgItem(hDlg, IDC_TASK_TIME), &st);
+    g_task->dailyHour = st.wHour;
+    g_task->dailyMinute = st.wMinute;
+}
+
+//
+// WEEKDAYS
+//
+static void LoadWeekdays(HWND hDlg)
+{
+    auto load = [&](int id, int bit)
+        {
+            CheckDlgButton(hDlg, id, g_task->weeklyDays.test(bit) ? BST_CHECKED : BST_UNCHECKED);
+        };
+
+    load(IDC_DAY_MON, 1);
+    load(IDC_DAY_TUE, 2);
+    load(IDC_DAY_WED, 3);
+    load(IDC_DAY_THU, 4);
+    load(IDC_DAY_FRI, 5);
+    load(IDC_DAY_SAT, 6);
+    load(IDC_DAY_SUN, 0);
+}
+
+static void SaveWeekdays(HWND hDlg)
+{
+    auto save = [&](int id, int bit)
+        {
+            if (IsDlgButtonChecked(hDlg, id) == BST_CHECKED)
+                g_task->weeklyDays.set(bit, true);
+            else
+                g_task->weeklyDays.set(bit, false);
+        };
+
+    save(IDC_DAY_MON, 1);
+    save(IDC_DAY_TUE, 2);
+    save(IDC_DAY_WED, 3);
+    save(IDC_DAY_THU, 4);
+    save(IDC_DAY_FRI, 5);
+    save(IDC_DAY_SAT, 6);
+    save(IDC_DAY_SUN, 0);
+}
+
+//
+// VALIDATION
+//
+static bool ValidateFields(HWND hDlg)
+{
+    wchar_t name[256], exe[512];
+    GetDlgItemTextW(hDlg, IDC_TASK_NAME, name, 256);
+    GetDlgItemTextW(hDlg, IDC_TASK_EXE, exe, 512);
+
+    if (wcslen(name) == 0)
+    {
+        MessageBoxW(hDlg, L"Name cannot be empty.", L"Error", MB_ICONERROR);
+        return false;
+    }
+
+    if (wcslen(exe) == 0)
+    {
+        MessageBoxW(hDlg, L"Executable path cannot be empty.", L"Error", MB_ICONERROR);
+        return false;
+    }
+
+    if (!filesystem::exists(exe))
+    {
+        MessageBoxW(hDlg, L"File does not exist.", L"Error", MB_ICONERROR);
+        return false;
+    }
+
+    return true;
+}
+
+//
+// FILE BROWSE
+//
 static void BrowseForExe(HWND hDlg)
 {
     IFileOpenDialog* dlg = nullptr;
-
-    if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr,
-        CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dlg))))
+    if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
+        IID_PPV_ARGS(&dlg))))
         return;
 
-    dlg->SetTitle(L"Select executable (.exe)");
+    dlg->SetTitle(L"Select executable (*.exe)");
 
-    COMDLG_FILTERSPEC filter[] = {
-        { L"Executable files", L"*.exe" }
+    const COMDLG_FILTERSPEC filter[] = {
+        { L"Executable", L"*.exe" }
     };
     dlg->SetFileTypes(1, filter);
 
@@ -46,48 +193,26 @@ static void BrowseForExe(HWND hDlg)
     dlg->Release();
 }
 
-static bool ValidateFields(HWND hDlg)
-{
-    wchar_t name[256], exe[512];
-    GetDlgItemTextW(hDlg, IDC_TASK_NAME, name, 256);
-    GetDlgItemTextW(hDlg, IDC_TASK_EXE, exe, 512);
-
-    if (wcslen(name) == 0) {
-        MessageBoxW(hDlg, L"Name cannot be empty.", L"Error", MB_ICONERROR);
-        return false;
-    }
-
-    if (wcslen(exe) == 0) {
-        MessageBoxW(hDlg, L"Executable path cannot be empty.", L"Error", MB_ICONERROR);
-        return false;
-    }
-
-    if (!std::filesystem::exists(exe)) {
-        MessageBoxW(hDlg, L"File does not exist.", L"Error", MB_ICONERROR);
-        return false;
-    }
-
-    return true;
-}
-
+//
+// LOAD & SAVE
+//
 static void LoadTaskToDialog(HWND hDlg)
 {
     SetDlgItemTextW(hDlg, IDC_TASK_NAME, g_task->name.c_str());
     SetDlgItemTextW(hDlg, IDC_TASK_EXE, g_task->exePath.c_str());
 
-    HWND c = GetDlgItem(hDlg, IDC_TASK_TRIGGER);
-    ComboBox_AddString(c, L"Once");
-    ComboBox_AddString(c, L"Interval");
-    ComboBox_AddString(c, L"Daily");
-    ComboBox_AddString(c, L"Weekly");
+    HWND cb = GetDlgItem(hDlg, IDC_TASK_TRIGGER);
+    ComboBox_AddString(cb, L"Once");
+    ComboBox_AddString(cb, L"Interval");
+    ComboBox_AddString(cb, L"Daily");
+    ComboBox_AddString(cb, L"Weekly");
 
-    ComboBox_SetCurSel(c, (int)g_task->triggerType);
+    ComboBox_SetCurSel(cb, (int)g_task->triggerType);
 
-    if (g_task->intervalMinutes)
-        SetDlgItemInt(hDlg, IDC_TASK_INTERVAL, g_task->intervalMinutes, FALSE);
+    SetDlgItemInt(hDlg, IDC_TASK_INTERVAL, g_task->intervalMinutes, FALSE);
 }
 
-static void SaveDialogToTask(HWND hDlg)
+static void SaveTask(HWND hDlg)
 {
     wchar_t buf[512];
 
@@ -97,49 +222,101 @@ static void SaveDialogToTask(HWND hDlg)
     GetDlgItemTextW(hDlg, IDC_TASK_EXE, buf, 512);
     g_task->exePath = buf;
 
-    int trig = ComboBox_GetCurSel(GetDlgItem(hDlg, IDC_TASK_TRIGGER));
-    g_task->triggerType = (TriggerType)trig;
+    g_task->triggerType =
+        (TriggerType)ComboBox_GetCurSel(GetDlgItem(hDlg, IDC_TASK_TRIGGER));
 
     g_task->intervalMinutes = GetDlgItemInt(hDlg, IDC_TASK_INTERVAL, nullptr, FALSE);
+
+    SaveTime(hDlg);
+    SaveWeekdays(hDlg);
 }
 
+//
+// COLORING — exe path validation
+//
+static HBRUSH hGreen = CreateSolidBrush(RGB(210, 255, 210));
+static HBRUSH hRed = CreateSolidBrush(RGB(255, 210, 210));
+static HBRUSH hWhite = CreateSolidBrush(RGB(255, 255, 255));
+
+static bool g_exeValid = true;
+
+//
+// DLG PROC
+//
 static INT_PTR CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM w, LPARAM l)
 {
     switch (msg)
     {
     case WM_INITDIALOG:
         LoadTaskToDialog(hDlg);
+        LoadTime(hDlg);
+        LoadWeekdays(hDlg);
+        UpdateTriggerUI(hDlg);
         return TRUE;
 
     case WM_COMMAND:
-        switch (LOWORD(w))
+        if (LOWORD(w) == IDC_TASK_BROWSE)
         {
-        case IDC_TASK_BROWSE:
             BrowseForExe(hDlg);
             return TRUE;
+        }
 
-        case IDOK:
+        // trigger change
+        if (LOWORD(w) == IDC_TASK_TRIGGER && HIWORD(w) == CBN_SELCHANGE)
+        {
+            UpdateTriggerUI(hDlg);
+            return TRUE;
+        }
+
+        // realtime exe validation
+        if (LOWORD(w) == IDC_TASK_EXE && HIWORD(w) == EN_CHANGE)
+        {
+            wchar_t exe[512];
+            GetDlgItemTextW(hDlg, IDC_TASK_EXE, exe, 512);
+            g_exeValid = filesystem::exists(exe);
+            InvalidateRect(hDlg, NULL, TRUE);
+        }
+
+        if (LOWORD(w) == IDOK)
+        {
             if (!ValidateFields(hDlg))
                 return TRUE;
 
-            SaveDialogToTask(hDlg);
+            SaveTask(hDlg);
             EndDialog(hDlg, 1);
             return TRUE;
+        }
 
-        case IDCANCEL:
+        if (LOWORD(w) == IDCANCEL)
+        {
             EndDialog(hDlg, 0);
             return TRUE;
         }
         break;
+
+    case WM_CTLCOLOREDIT:
+    {
+        HWND hCtrl = (HWND)l;
+        if (GetDlgCtrlID(hCtrl) == IDC_TASK_EXE)
+        {
+            HDC hdc = (HDC)w;
+            SetBkMode(hdc, TRANSPARENT);
+            return (INT_PTR)(g_exeValid ? hGreen : hRed);
+        }
+        break;
+    }
     }
 
     return FALSE;
 }
 
+//
+// PUBLIC API
+//
 bool TaskDialog::ShowDialog(HWND parent, TaskPtr& task, bool isNew)
 {
+    g_task = isNew ? make_shared<Task>() : task;
     g_isNew = isNew;
-    g_task = isNew ? std::make_shared<Task>() : task;
 
     if (isNew)
         g_task->id = util::GenerateGUID();
@@ -151,9 +328,11 @@ bool TaskDialog::ShowDialog(HWND parent, TaskPtr& task, bool isNew)
         DlgProc,
         0);
 
-    if (r == 1) {
+    if (r == 1)
+    {
         task = g_task;
         return true;
     }
+
     return false;
 }

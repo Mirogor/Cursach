@@ -1,28 +1,38 @@
 #include "resource.h"
 #include <windows.h>
 
-IDD_TASK_DIALOG DIALOGEX 0, 0, 260, 180
-STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+IDD_TASK_DIALOG DIALOGEX 0, 0, 300, 210
+STYLE DS_CENTER | WS_CAPTION | WS_SYSMENU | DS_MODALFRAME
 CAPTION "Create / Edit Task"
 FONT 9, "Segoe UI"
 BEGIN
-    LTEXT       "Name:",            -1, 10, 12, 60, 10
-    EDITTEXT    IDC_TASK_NAME,      80, 10, 160, 14, ES_AUTOHSCROLL
+    LTEXT       "Name:",                        -1, 10, 12, 60, 10
+    EDITTEXT    IDC_TASK_NAME,                  80, 10, 200, 14, ES_AUTOHSCROLL
 
-    LTEXT       "Executable:",      -1, 10, 36, 60, 10
-    EDITTEXT    IDC_TASK_EXE,       80, 34, 130, 14, ES_AUTOHSCROLL
-    PUSHBUTTON  "...",              IDC_TASK_BROWSE, 214, 33, 26, 16
+    LTEXT       "Executable:",                  -1, 10, 36, 60, 10
+    EDITTEXT    IDC_TASK_EXE,                   80, 34, 162, 14, ES_AUTOHSCROLL
+    PUSHBUTTON  "...",                          IDC_TASK_BROWSE, 248, 33, 32, 16
 
-    LTEXT       "Trigger:",         -1, 10, 62, 60, 10
-    COMBOBOX    IDC_TASK_TRIGGER,   80, 60, 160, 60,
-                CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT       "Trigger:",                     -1, 10, 62, 60, 10
+    COMBOBOX    IDC_TASK_TRIGGER,               80, 60, 200, 80, CBS_DROPDOWNLIST | WS_VSCROLL
 
-    LTEXT       "Interval, min:",   -1, 10, 92, 60, 10
-    EDITTEXT    IDC_TASK_INTERVAL,  80, 90, 60, 14, ES_NUMBER
+    LTEXT       "Interval (min):",              -1, 10, 92, 70, 10
+    EDITTEXT    IDC_TASK_INTERVAL,              80, 90, 60, 14, ES_NUMBER
 
-    LTEXT       "Daily time:",      -1, 10, 118, 60, 10
-    EDITTEXT    IDC_TASK_DAILY,     80, 116, 60, 14, ES_AUTOHSCROLL
+    LTEXT       "Time:",                        -1, 10, 118, 60, 10
+    CONTROL     "", IDC_TASK_TIME,              "SysDateTimePick32",
+                                                WS_TABSTOP | WS_VISIBLE | DTS_TIMEFORMAT,
+                                                80, 116, 120, 14
 
-    DEFPUSHBUTTON "OK",     IDOK,     108, 150, 60, 16
-    PUSHBUTTON   "Cancel",  IDCANCEL, 174, 150, 60, 16
+    LTEXT       "Weekdays:",                    -1, 10, 142, 60, 10
+    CONTROL     "Mon", IDC_DAY_MON,  "Button",  BS_AUTOCHECKBOX, 80, 140, 40, 10
+    CONTROL     "Tue", IDC_DAY_TUE,  "Button",  BS_AUTOCHECKBOX, 120, 140, 40, 10
+    CONTROL     "Wed", IDC_DAY_WED,  "Button",  BS_AUTOCHECKBOX, 160, 140, 40, 10
+    CONTROL     "Thu", IDC_DAY_THU,  "Button",  BS_AUTOCHECKBOX, 200, 140, 40, 10
+    CONTROL     "Fri", IDC_DAY_FRI,  "Button",  BS_AUTOCHECKBOX, 240, 140, 40, 10
+    CONTROL     "Sat", IDC_DAY_SAT,  "Button",  BS_AUTOCHECKBOX, 80, 155, 40, 10
+    CONTROL     "Sun", IDC_DAY_SUN,  "Button",  BS_AUTOCHECKBOX, 120, 155, 40, 10
+
+    DEFPUSHBUTTON "OK",     IDOK,     110, 185, 60, 16
+    PUSHBUTTON    "Cancel", IDCANCEL, 175, 185, 60, 16
 END
