@@ -1,0 +1,28 @@
+#include "resource.h"
+#include <windows.h>
+
+IDD_TASK_DIALOG DIALOGEX 0, 0, 260, 180
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Create / Edit Task"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT       "Name:",            -1, 10, 12, 60, 10
+    EDITTEXT    IDC_TASK_NAME,      80, 10, 160, 14, ES_AUTOHSCROLL
+
+    LTEXT       "Executable:",      -1, 10, 36, 60, 10
+    EDITTEXT    IDC_TASK_EXE,       80, 34, 130, 14, ES_AUTOHSCROLL
+    PUSHBUTTON  "...",              IDC_TASK_BROWSE, 214, 33, 26, 16
+
+    LTEXT       "Trigger:",         -1, 10, 62, 60, 10
+    COMBOBOX    IDC_TASK_TRIGGER,   80, 60, 160, 60,
+                CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    LTEXT       "Interval, min:",   -1, 10, 92, 60, 10
+    EDITTEXT    IDC_TASK_INTERVAL,  80, 90, 60, 14, ES_NUMBER
+
+    LTEXT       "Daily time:",      -1, 10, 118, 60, 10
+    EDITTEXT    IDC_TASK_DAILY,     80, 116, 60, 14, ES_AUTOHSCROLL
+
+    DEFPUSHBUTTON "OK",     IDOK,     108, 150, 60, 16
+    PUSHBUTTON   "Cancel",  IDCANCEL, 174, 150, 60, 16
+END
