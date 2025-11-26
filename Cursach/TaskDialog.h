@@ -1,11 +1,13 @@
 #pragma once
-#include <Windows.h>
-#include "Task.h"
+#include <windows.h>
+#include <string>
 #include <memory>
+#include "Task.h"
 
 class TaskDialog {
 public:
-    // modal dialog. If isNew==true, fills a new TaskPtr and returns it on OK.
-    // If editing, pass existing TaskPtr.
+    // Показывает модальный диалог. parent - обработчик родительского окна.
+    // task - если isNew == true, будет создана новая задача; иначе передается существующий TaskPtr и редактируется.
+    // Возвращает true при OK (задача изменена/создана), false при Cancel.
     static bool ShowDialog(HWND parent, TaskPtr& task, bool isNew);
 };

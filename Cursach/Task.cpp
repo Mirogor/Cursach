@@ -20,10 +20,10 @@ std::wstring TaskToDebugString(const TaskPtr& task) {
     if (!task) return L"<null>";
     std::wstringstream ss;
     ss << L"Task[id=" << task->id
-        << L", name=" << task->name
-        << L", enabled=" << (task->enabled ? L"true" : L"false")
-        << L", trigger=" << TriggerTypeToWString(task->triggerType)
-        << L", exe=" << task->exePath
-        << L"]";
+       << L", name=" << task->name
+       << L", enabled=" << (task->enabled ? L"true" : L"false")
+       << L", trigger=" << TriggerTypeToWString(task->triggerType)
+       << L", exe=" << task->exePath
+       << L"]";
     return ss.str();
 }
