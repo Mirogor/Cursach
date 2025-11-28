@@ -33,7 +33,7 @@ bool Persistence::Save(const std::vector<TaskPtr>& tasks) {
         ofs << L"      \"intervalMinutes\": " << t->intervalMinutes << L",\n";
         ofs << L"      \"dailyHour\": " << (int)t->dailyHour << L",\n";
         ofs << L"      \"dailyMinute\": " << (int)t->dailyMinute << L",\n";
-        ofs << L"      \"dailySecond\": " << (int)t->dailySecond << L",\n";  // ← ДОБАВЛЕНО
+        ofs << L"      \"dailySecond\": " << (int)t->dailySecond << L",\n";
 
         unsigned long days = 0;
         for (int k = 0; k < 7; ++k)
@@ -42,7 +42,7 @@ bool Persistence::Save(const std::vector<TaskPtr>& tasks) {
         ofs << L"      \"weeklyDays\": " << days << L",\n";
         ofs << L"      \"weeklyHour\": " << (int)t->weeklyHour << L",\n";
         ofs << L"      \"weeklyMinute\": " << (int)t->weeklyMinute << L",\n";
-        ofs << L"      \"weeklySecond\": " << (int)t->weeklySecond << L",\n";  // ← ДОБАВЛЕНО
+        ofs << L"      \"weeklySecond\": " << (int)t->weeklySecond << L",\n";
         ofs << L"      \"runIfMissed\": " << (t->runIfMissed ? L"true" : L"false") << L"\n";
         ofs << L"    }" << (i + 1 < tasks.size() ? L"," : L"") << L"\n";
     }
@@ -108,13 +108,15 @@ std::vector<TaskPtr> Persistence::Load() {
 
         std::wstring block = content.substr(start, i - start + 1);
 
+        // ← ИСПРАВЛЕНО: Теперь применяем UnescapeJSON к строковым полям
         auto getString = [&](const std::wstring& key)->std::wstring {
             size_t p = block.find(L"\"" + key + L"\"");
             if (p == std::wstring::npos) return L"";
             size_t colon = block.find(L":", p);
             size_t q1 = block.find(L"\"", colon);
             size_t q2 = block.find(L"\"", q1 + 1);
-            return block.substr(q1 + 1, q2 - q1 - 1);
+            std::wstring raw = block.substr(q1 + 1, q2 - q1 - 1);
+            return util::UnescapeJSON(raw);  // ← ДОБАВЛЕНО: разэкранирование
             };
 
         auto getInt = [&](const std::wstring& key)->long long {
@@ -146,14 +148,14 @@ std::vector<TaskPtr> Persistence::Load() {
         t->intervalMinutes = (uint32_t)getInt(L"intervalMinutes");
         t->dailyHour = (uint8_t)getInt(L"dailyHour");
         t->dailyMinute = (uint8_t)getInt(L"dailyMinute");
-        t->dailySecond = (uint8_t)getInt(L"dailySecond");  // ← ДОБАВЛЕНО
+        t->dailySecond = (uint8_t)getInt(L"dailySecond");
 
         unsigned long days = (unsigned long)getInt(L"weeklyDays");
         t->weeklyDays = (uint8_t)(days & 0x7F);
 
         t->weeklyHour = (uint8_t)getInt(L"weeklyHour");
         t->weeklyMinute = (uint8_t)getInt(L"weeklyMinute");
-        t->weeklySecond = (uint8_t)getInt(L"weeklySecond");  // ← ДОБАВЛЕНО
+        t->weeklySecond = (uint8_t)getInt(L"weeklySecond");
 
         size_t pRunIf = block.find(L"\"runIfMissed\"");
         if (pRunIf != std::wstring::npos) {

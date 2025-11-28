@@ -1,4 +1,4 @@
-#include "Utils.h"
+﻿#include "Utils.h"
 #include <Windows.h>
 #include <shlobj.h>
 #include <sstream>
@@ -35,7 +35,7 @@ namespace util {
     }
 
     std::wstring TimePointToWString(const std::chrono::system_clock::time_point& tp) {
-        if (tp.time_since_epoch().count() == 0) return L"�������";
+        if (tp.time_since_epoch().count() == 0) return L"Никогда";
         std::time_t t = std::chrono::system_clock::to_time_t(tp);
         std::tm tm;
         localtime_s(&tm, &t);
@@ -76,6 +76,49 @@ namespace util {
             }
         }
         return out;
+    }
+
+    // ← ДОБАВЛЕНО: Обратная операция для EscapeJSON
+    std::wstring UnescapeJSON(const std::wstring& s) {
+        std::wstring out;
+        out.reserve(s.size());
+
+        bool escape = false;
+        for (wchar_t c : s) {
+            if (escape) {
+                switch (c) {
+                case L'\\': out.push_back(L'\\'); break;
+                case L'"':  out.push_back(L'"'); break;
+                case L'n':  out.push_back(L'\n'); break;
+                case L'r':  out.push_back(L'\r'); break;
+                case L't':  out.push_back(L'\t'); break;
+                default:    out.push_back(c); break;  // Неизвестная escape-последовательность
+                }
+                escape = false;
+            }
+            else if (c == L'\\') {
+                escape = true;
+            }
+            else {
+                out.push_back(c);
+            }
+        }
+
+        return out;
+    }
+
+    // ← ДОБАВЛЕНО: Извлечение имени файла из полного пути
+    std::wstring GetFileName(const std::wstring& path) {
+        if (path.empty()) return L"";
+
+        // Ищем последний слеш или обратный слеш
+        size_t pos = path.find_last_of(L"\\/");
+
+        if (pos == std::wstring::npos) {
+            return path;  // Уже имя файла без пути
+        }
+
+        return path.substr(pos + 1);
     }
 
 } // namespace util
