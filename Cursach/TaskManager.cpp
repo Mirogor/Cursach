@@ -1,11 +1,11 @@
-#include "TaskManager.h"
+п»ї#include "TaskManager.h"
 #include "Persistence.h"
 #include "Logger.h"
 #include "Utils.h"
 
 #include <algorithm>
 #include <chrono>
-#include <shared_mutex>   // обязательно!
+#include <shared_mutex>
 #include <string>
 
 TaskManager::TaskManager() {
@@ -46,27 +46,19 @@ void TaskManager::RemoveTask(const std::wstring& id) {
         [&](const TaskPtr& t) { return t && t->id == id; });
 
     if (it == tasks.end()) {
-        // ничего не найдено
         g_Logger.Log(LogLevel::Info, L"TaskManager", L"RemoveTask: not found id=" + id);
         return;
     }
 
-    // Скопируем имя (и любые другие поля), пока объект ещё гарантированно жив
     std::wstring name = (*it)->name;
-
-    // Удаляем ровно этот элемент
     tasks.erase(it);
-
-    // Теперь можно разблокировать, если нужно делать длительные операции
     lock.unlock();
 
-    // Сохраняем и уведомляем (вне мьютекса)
     Save();
     if (onChange) onChange();
 
     g_Logger.Log(LogLevel::Info, L"TaskManager", L"Removed task: " + name);
 }
-
 
 void TaskManager::UpdateTask(const TaskPtr& task) {
     std::unique_lock lock(mutex);
@@ -131,7 +123,7 @@ void TaskManager::CalculateNextRun(const TaskPtr& task) {
 
         local.tm_hour = task->dailyHour;
         local.tm_min = task->dailyMinute;
-        local.tm_sec = 0;
+        local.tm_sec = task->dailySecond;  // в†ђ РРЎРџР РђР’Р›Р•РќРћ: Р±С‹Р»Рѕ = 0
 
         time_t target = mktime(&local);
         auto tp = system_clock::from_time_t(target);
@@ -156,7 +148,7 @@ void TaskManager::CalculateNextRun(const TaskPtr& task) {
                 cand.tm_mday += offset;
                 cand.tm_hour = task->weeklyHour;
                 cand.tm_min = task->weeklyMinute;
-                cand.tm_sec = 0;
+                cand.tm_sec = task->weeklySecond;  // в†ђ РРЎРџР РђР’Р›Р•РќРћ: Р±С‹Р»Рѕ = 0
 
                 time_t ct = mktime(&cand);
                 auto tp = system_clock::from_time_t(ct);

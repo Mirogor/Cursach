@@ -1,6 +1,6 @@
 ﻿#include "TaskDialog.h"
 #include <windows.h>
-#include <windowsx.h>     // ← ComboBox_ макросы
+#include <windowsx.h>
 #include <commctrl.h>
 #include <shobjidl.h>
 #include <filesystem>
@@ -15,18 +15,12 @@ using namespace std;
 static TaskPtr g_task;
 static bool g_isNew;
 
-//
-// simple show/hide helper
-//
 static void ShowCtrl(HWND hDlg, int id, bool show)
 {
     HWND h = GetDlgItem(hDlg, id);
     if (h) ShowWindow(h, show ? SW_SHOW : SW_HIDE);
 }
 
-//
-// TRIGGER UI
-//
 static void UpdateTriggerUI(HWND hDlg)
 {
     int t = ComboBox_GetCurSel(GetDlgItem(hDlg, IDC_TASK_TRIGGER));
@@ -65,19 +59,15 @@ static void UpdateTriggerUI(HWND hDlg)
     }
 }
 
-//
-// TIME PICKER
-//
 static void LoadTime(HWND hDlg)
 {
     SYSTEMTIME st{};
-    if (g_task->dailyHour >= 0)
-    {
-        st.wHour = g_task->dailyHour;
-        st.wMinute = g_task->dailyMinute;
-    }
-    else
-        GetLocalTime(&st);
+    GetLocalTime(&st);  // Заполняем дефолтом
+
+    // Устанавливаем время из задачи
+    st.wHour = g_task->dailyHour;
+    st.wMinute = g_task->dailyMinute;
+    st.wSecond = g_task->dailySecond;  // ← ДОБАВЛЕНО
 
     DateTime_SetSystemtime(GetDlgItem(hDlg, IDC_TASK_TIME), GDT_VALID, &st);
 }
@@ -88,11 +78,14 @@ static void SaveTime(HWND hDlg)
     DateTime_GetSystemtime(GetDlgItem(hDlg, IDC_TASK_TIME), &st);
     g_task->dailyHour = st.wHour;
     g_task->dailyMinute = st.wMinute;
+    g_task->dailySecond = st.wSecond;  // ← ДОБАВЛЕНО
+
+    // Для Weekly используем те же значения
+    g_task->weeklyHour = st.wHour;
+    g_task->weeklyMinute = st.wMinute;
+    g_task->weeklySecond = st.wSecond;  // ← ДОБАВЛЕНО
 }
 
-//
-// WEEKDAYS
-//
 static void LoadWeekdays(HWND hDlg)
 {
     auto load = [&](int id, int bit)
@@ -128,9 +121,6 @@ static void SaveWeekdays(HWND hDlg)
     save(IDC_DAY_SUN, 0);
 }
 
-//
-// VALIDATION
-//
 static bool ValidateFields(HWND hDlg)
 {
     wchar_t name[256], exe[512];
@@ -158,9 +148,6 @@ static bool ValidateFields(HWND hDlg)
     return true;
 }
 
-//
-// FILE BROWSE
-//
 static void BrowseForExe(HWND hDlg)
 {
     IFileOpenDialog* dlg = nullptr;
@@ -193,9 +180,6 @@ static void BrowseForExe(HWND hDlg)
     dlg->Release();
 }
 
-//
-// LOAD & SAVE
-//
 static void LoadTaskToDialog(HWND hDlg)
 {
     SetDlgItemTextW(hDlg, IDC_TASK_NAME, g_task->name.c_str());
@@ -231,18 +215,12 @@ static void SaveTask(HWND hDlg)
     SaveWeekdays(hDlg);
 }
 
-//
-// COLORING — exe path validation
-//
 static HBRUSH hGreen = CreateSolidBrush(RGB(210, 255, 210));
 static HBRUSH hRed = CreateSolidBrush(RGB(255, 210, 210));
 static HBRUSH hWhite = CreateSolidBrush(RGB(255, 255, 255));
 
 static bool g_exeValid = true;
 
-//
-// DLG PROC
-//
 static INT_PTR CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM w, LPARAM l)
 {
     switch (msg)
@@ -261,14 +239,12 @@ static INT_PTR CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM w, LPARAM l)
             return TRUE;
         }
 
-        // trigger change
         if (LOWORD(w) == IDC_TASK_TRIGGER && HIWORD(w) == CBN_SELCHANGE)
         {
             UpdateTriggerUI(hDlg);
             return TRUE;
         }
 
-        // realtime exe validation
         if (LOWORD(w) == IDC_TASK_EXE && HIWORD(w) == EN_CHANGE)
         {
             wchar_t exe[512];

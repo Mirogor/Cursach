@@ -1,10 +1,10 @@
-#include "Persistence.h"
+Ôªø#include "Persistence.h"
 #include "Task.h"
 #include "Utils.h"
 #include "Logger.h"
 #include <fstream>
 #include <sstream>
-#include <Windows.h>    // Œ¡ﬂ«¿“≈À‹ÕŒ ‰Îˇ DeleteFileW / MoveFileW
+#include <Windows.h>
 
 Persistence::Persistence() {
     path_ = util::GetAppDataDir() + L"\\tasks.json";
@@ -33,8 +33,8 @@ bool Persistence::Save(const std::vector<TaskPtr>& tasks) {
         ofs << L"      \"intervalMinutes\": " << t->intervalMinutes << L",\n";
         ofs << L"      \"dailyHour\": " << (int)t->dailyHour << L",\n";
         ofs << L"      \"dailyMinute\": " << (int)t->dailyMinute << L",\n";
+        ofs << L"      \"dailySecond\": " << (int)t->dailySecond << L",\n";  // ‚Üê –î–û–ë–ê–í–õ–ï–ù–û
 
-        // weeklyDays ó ƒŒÀ∆ÕŒ ¡€“‹ uint8_t / unsigned char
         unsigned long days = 0;
         for (int k = 0; k < 7; ++k)
             if (t->weeklyDays.test(k)) days |= (1 << k);
@@ -42,13 +42,13 @@ bool Persistence::Save(const std::vector<TaskPtr>& tasks) {
         ofs << L"      \"weeklyDays\": " << days << L",\n";
         ofs << L"      \"weeklyHour\": " << (int)t->weeklyHour << L",\n";
         ofs << L"      \"weeklyMinute\": " << (int)t->weeklyMinute << L",\n";
+        ofs << L"      \"weeklySecond\": " << (int)t->weeklySecond << L",\n";  // ‚Üê –î–û–ë–ê–í–õ–ï–ù–û
         ofs << L"      \"runIfMissed\": " << (t->runIfMissed ? L"true" : L"false") << L"\n";
         ofs << L"    }" << (i + 1 < tasks.size() ? L"," : L"") << L"\n";
     }
     ofs << L"  ]\n}\n";
     ofs.close();
 
-    // atomic replace
     DeleteFileW(path_.c_str());
     if (!MoveFileW(tmp.c_str(), path_.c_str())) {
         g_Logger.Log(LogLevel::Error, L"Persistence", L"Failed to move temp file to final location");
@@ -135,7 +135,6 @@ std::vector<TaskPtr> Persistence::Load() {
         t->arguments = getString(L"arguments");
         t->workingDirectory = getString(L"workingDirectory");
 
-        // enabled
         size_t pEnabled = block.find(L"\"enabled\"");
         if (pEnabled != std::wstring::npos) {
             size_t colon = block.find(L":", pEnabled);
@@ -147,12 +146,14 @@ std::vector<TaskPtr> Persistence::Load() {
         t->intervalMinutes = (uint32_t)getInt(L"intervalMinutes");
         t->dailyHour = (uint8_t)getInt(L"dailyHour");
         t->dailyMinute = (uint8_t)getInt(L"dailyMinute");
+        t->dailySecond = (uint8_t)getInt(L"dailySecond");  // ‚Üê –î–û–ë–ê–í–õ–ï–ù–û
 
         unsigned long days = (unsigned long)getInt(L"weeklyDays");
         t->weeklyDays = (uint8_t)(days & 0x7F);
 
         t->weeklyHour = (uint8_t)getInt(L"weeklyHour");
         t->weeklyMinute = (uint8_t)getInt(L"weeklyMinute");
+        t->weeklySecond = (uint8_t)getInt(L"weeklySecond");  // ‚Üê –î–û–ë–ê–í–õ–ï–ù–û
 
         size_t pRunIf = block.find(L"\"runIfMissed\"");
         if (pRunIf != std::wstring::npos) {

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <string>
 #include <bitset>
 #include <chrono>
@@ -27,10 +27,10 @@ struct Task {
     // for INTERVAL:
     uint32_t intervalMinutes = 60;
     // for DAILY:
-    uint8_t dailyHour = 12, dailyMinute = 0;
+    uint8_t dailyHour = 12, dailyMinute = 0, dailySecond = 0;  // ← ДОБАВЛЕНО dailySecond
     // for WEEKLY:
     std::bitset<7> weeklyDays; // 0 = Sun, 1 = Mon, ..., 6 = Sat
-    uint8_t weeklyHour = 12, weeklyMinute = 0;
+    uint8_t weeklyHour = 12, weeklyMinute = 0, weeklySecond = 0;  // ← ДОБАВЛЕНО weeklySecond
 
     bool runIfMissed = true;
 
