@@ -47,7 +47,8 @@ void MainWindow::CreateControls() {
     CreateWindowW(L"BUTTON", L"Edit", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 100, 10, 80, 30, hwnd, (HMENU)2002, GetModuleHandle(NULL), NULL);
     CreateWindowW(L"BUTTON", L"Delete", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 190, 10, 80, 30, hwnd, (HMENU)2003, GetModuleHandle(NULL), NULL);
     CreateWindowW(L"BUTTON", L"Run", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 280, 10, 80, 30, hwnd, (HMENU)2004, GetModuleHandle(NULL), NULL);
-    CreateWindowW(L"BUTTON", L"Refresh", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 370, 10, 80, 30, hwnd, (HMENU)2005, GetModuleHandle(NULL), NULL);
+    CreateWindowW(L"BUTTON", L"Enable/Disable", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 370, 10, 120, 30, hwnd, (HMENU)2006, GetModuleHandle(NULL), NULL);  // ? ДОБАВЛЕНО
+    CreateWindowW(L"BUTTON", L"Refresh", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 500, 10, 80, 30, hwnd, (HMENU)2005, GetModuleHandle(NULL), NULL);
 
     RefreshList();
 }
@@ -125,6 +126,52 @@ void MainWindow::OnRun() {
         }).detach();
 }
 
+// ? ДОБАВЛЕНО: Новая функция переключения статуса
+void MainWindow::OnToggleEnabled() {
+    int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
+    if (sel < 0) {
+        MessageBoxW(hwnd, L"Please select a task first.", L"Info", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    auto tasks = taskManager->GetAllTasks();
+    if (sel >= (int)tasks.size()) return;
+
+    TaskPtr t = tasks[sel];
+
+    // Переключаем статус
+    t->enabled = !t->enabled;
+
+    // Логируем изменение
+    g_Logger.Log(
+        LogLevel::Info,
+        L"MainWindow",
+        L"Task '" + t->name + L"' " + (t->enabled ? L"enabled" : L"disabled")
+    );
+
+    // Если задача включена, пересчитываем nextRunTime
+    if (t->enabled) {
+        taskManager->CalculateNextRun(t);
+    }
+    else {
+        // Если отключена, обнуляем nextRunTime чтобы планировщик её пропустил
+        t->nextRunTime = std::chrono::system_clock::time_point{};
+    }
+
+    // Обновляем задачу в менеджере
+    taskManager->UpdateTask(t);
+
+    // Уведомляем планировщик
+    scheduler->Notify();
+
+    // Обновляем UI
+    RefreshList();
+
+    // Показываем уведомление пользователю
+    std::wstring msg = L"Task '" + t->name + L"' is now " + (t->enabled ? L"ENABLED" : L"DISABLED");
+    MessageBoxW(hwnd, msg.c_str(), L"Status Changed", MB_OK | MB_ICONINFORMATION);
+}
+
 LRESULT CALLBACK MainWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     MainWindow* wnd = nullptr;
     if (uMsg == WM_CREATE) {
@@ -146,6 +193,7 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM
         case 2003: wnd->OnDelete(); break;
         case 2004: wnd->OnRun(); break;
         case 2005: wnd->RefreshList(); break;
+        case 2006: wnd->OnToggleEnabled(); break;  // ? ДОБАВЛЕНО
         }
         break;
     case WM_USER + 100:

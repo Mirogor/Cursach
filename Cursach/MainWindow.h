@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <Windows.h>
 #include "TaskManager.h"
 #include "Scheduler.h"
@@ -20,5 +20,6 @@ private:
     void OnEdit();
     void OnDelete();
     void OnRun();
+    void OnToggleEnabled();  // ← ДОБАВЛЕНО
     static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 };
