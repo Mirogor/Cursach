@@ -21,7 +21,7 @@ bool MainWindow::Create(HINSTANCE hInst) {
     RegisterClassW(&wc);
 
     hwnd = CreateWindowW(wc.lpszClassName, L"Mini Task Scheduler",
-        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 900, 520,  // ← ИЗМЕНЕНО: высота окна +20px
+        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 900, 520,
         NULL, NULL, hInst, this);
     if (!hwnd) return false;
     ShowWindow(hwnd, SW_SHOW);
@@ -33,7 +33,6 @@ void MainWindow::CreateControls() {
     RECT rc;
     GetClientRect(hwnd, &rc);
 
-    // ← ИЗМЕНЕНО: ListView теперь начинается ниже (y=80 вместо 50)
     hList = CreateWindowExW(0, WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL,
         10, 80, rc.right - 20, rc.bottom - 90, hwnd, (HMENU)1001, GetModuleHandle(NULL), NULL);
 
@@ -44,9 +43,8 @@ void MainWindow::CreateControls() {
     col.pszText = (LPWSTR)L"Status"; col.cx = 80; ListView_InsertColumn(hList, 1, &col);
     col.pszText = (LPWSTR)L"Trigger"; col.cx = 120; ListView_InsertColumn(hList, 2, &col);
     col.pszText = (LPWSTR)L"Next Run"; col.cx = 200; ListView_InsertColumn(hList, 3, &col);
-    col.pszText = (LPWSTR)L"Executable"; col.cx = 260; ListView_InsertColumn(hList, 4, &col);  // ← ИЗМЕНЕНО: "Command" → "Executable"
+    col.pszText = (LPWSTR)L"Executable"; col.cx = 260; ListView_InsertColumn(hList, 4, &col);
 
-    // Первая строка кнопок (y=10)
     CreateWindowW(L"BUTTON", L"New", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 10, 10, 80, 30, hwnd, (HMENU)2001, GetModuleHandle(NULL), NULL);
     CreateWindowW(L"BUTTON", L"Edit", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 100, 10, 80, 30, hwnd, (HMENU)2002, GetModuleHandle(NULL), NULL);
     CreateWindowW(L"BUTTON", L"Delete", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 190, 10, 80, 30, hwnd, (HMENU)2003, GetModuleHandle(NULL), NULL);
@@ -54,7 +52,6 @@ void MainWindow::CreateControls() {
     CreateWindowW(L"BUTTON", L"Enable/Disable", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 370, 10, 120, 30, hwnd, (HMENU)2006, GetModuleHandle(NULL), NULL);
     CreateWindowW(L"BUTTON", L"Refresh", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 500, 10, 80, 30, hwnd, (HMENU)2005, GetModuleHandle(NULL), NULL);
 
-    // ← ИЗМЕНЕНО: Вторая строка - checkbox'ы для сортировки (y=45)
     hCheckSortName = CreateWindowW(L"BUTTON", L"Sort by Name",
         WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
         10, 45, 130, 25, hwnd, (HMENU)2007, GetModuleHandle(NULL), NULL);
@@ -62,6 +59,11 @@ void MainWindow::CreateControls() {
     hCheckSortStatus = CreateWindowW(L"BUTTON", L"Sort by Status",
         WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
         150, 45, 130, 25, hwnd, (HMENU)2008, GetModuleHandle(NULL), NULL);
+
+    // ← ДОБАВЛЕНО: Статистика справа от checkbox'ов
+    hStatLabel = CreateWindowW(L"STATIC", L"",
+        WS_CHILD | WS_VISIBLE | SS_LEFT,
+        300, 45, 550, 25, hwnd, (HMENU)2009, GetModuleHandle(NULL), NULL);
 
     RefreshList();
 }
@@ -101,12 +103,34 @@ void MainWindow::RefreshList() {
         auto ns = util::TimePointToWString(t->nextRunTime);
         ListView_SetItemText(hList, idx, 3, const_cast<LPWSTR>(ns.c_str()));
 
-        // ← ИЗМЕНЕНО: Показываем только имя файла вместо полного пути
         std::wstring fileName = util::GetFileName(t->exePath);
         ListView_SetItemText(hList, idx, 4, const_cast<LPWSTR>(fileName.c_str()));
 
         ++idx;
     }
+
+    UpdateStatistics();  // ← ДОБАВЛЕНО: Обновляем статистику после рефреша
+}
+
+// ← ДОБАВЛЕНО: Функция обновления статистики
+void MainWindow::UpdateStatistics() {
+    if (!hStatLabel) return;
+
+    auto tasks = taskManager->GetAllTasks();
+    int total = (int)tasks.size();
+    int enabled = 0;
+    int disabled = 0;
+
+    for (const auto& t : tasks) {
+        if (t->enabled) ++enabled;
+        else ++disabled;
+    }
+
+    std::wstring stat = L"📊 Total: " + std::to_wstring(total) +
+        L"  |  ✓ Enabled: " + std::to_wstring(enabled) +
+        L"  |  ✗ Disabled: " + std::to_wstring(disabled);
+
+    SetWindowTextW(hStatLabel, stat.c_str());
 }
 
 void MainWindow::OnNew() {
@@ -121,9 +145,28 @@ void MainWindow::OnNew() {
 void MainWindow::OnEdit() {
     int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
     if (sel < 0) return;
+
+    // ← ИСПРАВЛЕНО: Получаем задачу через ID, а не индекс (важно при сортировке!)
     auto tasks = taskManager->GetAllTasks();
+
+    // Применяем ту же сортировку что и в RefreshList
+    if (sortByStatus || sortByName) {
+        std::stable_sort(tasks.begin(), tasks.end(), [this](const TaskPtr& a, const TaskPtr& b) {
+            if (sortByStatus) {
+                if (a->enabled != b->enabled) {
+                    return a->enabled > b->enabled;
+                }
+            }
+            if (sortByName) {
+                return a->name < b->name;
+            }
+            return false;
+            });
+    }
+
     if (sel >= (int)tasks.size()) return;
     TaskPtr t = tasks[sel];
+
     if (TaskDialog::ShowDialog(hwnd, t, false)) {
         taskManager->UpdateTask(t);
         scheduler->Notify();
@@ -134,9 +177,27 @@ void MainWindow::OnEdit() {
 void MainWindow::OnDelete() {
     int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
     if (sel < 0) return;
+
     auto tasks = taskManager->GetAllTasks();
+
+    // Применяем сортировку
+    if (sortByStatus || sortByName) {
+        std::stable_sort(tasks.begin(), tasks.end(), [this](const TaskPtr& a, const TaskPtr& b) {
+            if (sortByStatus) {
+                if (a->enabled != b->enabled) {
+                    return a->enabled > b->enabled;
+                }
+            }
+            if (sortByName) {
+                return a->name < b->name;
+            }
+            return false;
+            });
+    }
+
     if (sel >= (int)tasks.size()) return;
     TaskPtr t = tasks[sel];
+
     if (MessageBoxW(hwnd, (L"Delete task: " + t->name).c_str(), L"Confirm", MB_YESNO) == IDYES) {
         taskManager->RemoveTask(t->id);
         scheduler->Notify();
@@ -147,9 +208,27 @@ void MainWindow::OnDelete() {
 void MainWindow::OnRun() {
     int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
     if (sel < 0) return;
+
     auto tasks = taskManager->GetAllTasks();
+
+    // Применяем сортировку
+    if (sortByStatus || sortByName) {
+        std::stable_sort(tasks.begin(), tasks.end(), [this](const TaskPtr& a, const TaskPtr& b) {
+            if (sortByStatus) {
+                if (a->enabled != b->enabled) {
+                    return a->enabled > b->enabled;
+                }
+            }
+            if (sortByName) {
+                return a->name < b->name;
+            }
+            return false;
+            });
+    }
+
     if (sel >= (int)tasks.size()) return;
     TaskPtr t = tasks[sel];
+
     std::thread([t, this]() {
         JobExecutor::RunTask(t);
         taskManager->CalculateNextRun(t);
@@ -166,6 +245,22 @@ void MainWindow::OnToggleEnabled() {
     }
 
     auto tasks = taskManager->GetAllTasks();
+
+    // Применяем сортировку
+    if (sortByStatus || sortByName) {
+        std::stable_sort(tasks.begin(), tasks.end(), [this](const TaskPtr& a, const TaskPtr& b) {
+            if (sortByStatus) {
+                if (a->enabled != b->enabled) {
+                    return a->enabled > b->enabled;
+                }
+            }
+            if (sortByName) {
+                return a->name < b->name;
+            }
+            return false;
+            });
+    }
+
     if (sel >= (int)tasks.size()) return;
 
     TaskPtr t = tasks[sel];
@@ -206,13 +301,29 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM
     if (!wnd) return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 
     switch (uMsg) {
+
+        // ← ДОБАВЛЕНО: Обработка изменения размера окна
+    case WM_SIZE:
+        if (wnd && wnd->hList) {
+            RECT rc;
+            GetClientRect(hWnd, &rc);
+
+            // Растягиваем ListView по размеру окна
+            MoveWindow(wnd->hList, 10, 80, rc.right - 20, rc.bottom - 90, TRUE);
+        }
+        break;
+
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case 2001: wnd->OnNew(); break;
         case 2002: wnd->OnEdit(); break;
         case 2003: wnd->OnDelete(); break;
         case 2004: wnd->OnRun(); break;
-        case 2005: wnd->RefreshList(); break;
+        case 2005:
+            // ← Кнопка Refresh работает корректно - обновляет список
+            wnd->RefreshList();
+            g_Logger.Log(LogLevel::Info, L"MainWindow", L"Manual refresh triggered");
+            break;
         case 2006: wnd->OnToggleEnabled(); break;
 
         case 2007: // Sort by Name
@@ -234,12 +345,16 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM
             break;
         }
         break;
+
     case WM_USER + 100:
+        // Обновление после фонового запуска задачи
         wnd->RefreshList();
         break;
+
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
+
     default:
         return DefWindowProcW(hWnd, uMsg, wParam, lParam);
     }

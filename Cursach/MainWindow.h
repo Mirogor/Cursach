@@ -12,17 +12,18 @@ public:
 private:
     HWND hwnd = nullptr;
     HWND hList = nullptr;
-    HWND hCheckSortName = nullptr;      // ← ДОБАВЛЕНО: Checkbox для сортировки по имени
-    HWND hCheckSortStatus = nullptr;    // ← ДОБАВЛЕНО: Checkbox для сортировки по статусу
+    HWND hCheckSortName = nullptr;
+    HWND hCheckSortStatus = nullptr;
+    HWND hStatLabel = nullptr;  // ← ДОБАВЛЕНО: метка статистики
     TaskManager* taskManager;
     Scheduler* scheduler;
 
-    // Флаги сортировки
-    bool sortByName = false;            // ← ДОБАВЛЕНО
-    bool sortByStatus = false;          // ← ДОБАВЛЕНО
+    bool sortByName = false;
+    bool sortByStatus = false;
 
     void CreateControls();
     void RefreshList();
+    void UpdateStatistics();  // ← ДОБАВЛЕНО
     void OnNew();
     void OnEdit();
     void OnDelete();
