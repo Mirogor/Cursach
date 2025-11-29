@@ -7,6 +7,8 @@
 #include <algorithm>
 #include "JobExecutor.h"
 
+#define IDM_ABOUT 3001  // ← ID меню "About"
+
 MainWindow::MainWindow(TaskManager* tm, Scheduler* sched) : taskManager(tm), scheduler(sched) {}
 
 MainWindow::~MainWindow() {}
@@ -20,9 +22,16 @@ bool MainWindow::Create(HINSTANCE hInst) {
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     RegisterClassW(&wc);
 
+    // ← ИЗМЕНЕНО: Добавляем меню
+    HMENU hMenu = CreateMenu();
+    HMENU hHelpMenu = CreatePopupMenu();
+    AppendMenuW(hHelpMenu, MF_STRING, IDM_ABOUT, L"About");
+    AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hHelpMenu, L"Help");
+
     hwnd = CreateWindowW(wc.lpszClassName, L"Mini Task Scheduler",
         WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 900, 520,
-        NULL, NULL, hInst, this);
+        NULL, hMenu, hInst, this);  // ← Передаем меню
+
     if (!hwnd) return false;
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
@@ -60,7 +69,6 @@ void MainWindow::CreateControls() {
         WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
         150, 45, 130, 25, hwnd, (HMENU)2008, GetModuleHandle(NULL), NULL);
 
-    // ← ДОБАВЛЕНО: Статистика справа от checkbox'ов
     hStatLabel = CreateWindowW(L"STATIC", L"",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
         300, 45, 550, 25, hwnd, (HMENU)2009, GetModuleHandle(NULL), NULL);
@@ -109,10 +117,9 @@ void MainWindow::RefreshList() {
         ++idx;
     }
 
-    UpdateStatistics();  // ← ДОБАВЛЕНО: Обновляем статистику после рефреша
+    UpdateStatistics();
 }
 
-// ← ДОБАВЛЕНО: Функция обновления статистики
 void MainWindow::UpdateStatistics() {
     if (!hStatLabel) return;
 
@@ -133,6 +140,23 @@ void MainWindow::UpdateStatistics() {
     SetWindowTextW(hStatLabel, stat.c_str());
 }
 
+// ← ДОБАВЛЕНО: Диалог "About"
+void MainWindow::ShowAboutDialog() {
+    std::wstring about =
+        L"Mini Task Scheduler\n"
+        L"Version 1.0\n\n"
+        L"A lightweight task scheduling application for Windows.\n\n"
+        L"Features:\n"
+        L"• Once, Interval, Daily, Weekly triggers\n"
+        L"• Enable/Disable tasks\n"
+        L"• Manual task execution\n"
+        L"• Automatic background scheduling\n"
+        L"• Sorting by name and status\n\n"
+        L"© 2025 - Developed with passion";
+
+    MessageBoxW(hwnd, about.c_str(), L"About Mini Task Scheduler", MB_OK | MB_ICONINFORMATION);
+}
+
 void MainWindow::OnNew() {
     TaskPtr t;
     if (TaskDialog::ShowDialog(hwnd, t, true)) {
@@ -146,10 +170,8 @@ void MainWindow::OnEdit() {
     int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
     if (sel < 0) return;
 
-    // ← ИСПРАВЛЕНО: Получаем задачу через ID, а не индекс (важно при сортировке!)
     auto tasks = taskManager->GetAllTasks();
 
-    // Применяем ту же сортировку что и в RefreshList
     if (sortByStatus || sortByName) {
         std::stable_sort(tasks.begin(), tasks.end(), [this](const TaskPtr& a, const TaskPtr& b) {
             if (sortByStatus) {
@@ -180,7 +202,6 @@ void MainWindow::OnDelete() {
 
     auto tasks = taskManager->GetAllTasks();
 
-    // Применяем сортировку
     if (sortByStatus || sortByName) {
         std::stable_sort(tasks.begin(), tasks.end(), [this](const TaskPtr& a, const TaskPtr& b) {
             if (sortByStatus) {
@@ -211,7 +232,6 @@ void MainWindow::OnRun() {
 
     auto tasks = taskManager->GetAllTasks();
 
-    // Применяем сортировку
     if (sortByStatus || sortByName) {
         std::stable_sort(tasks.begin(), tasks.end(), [this](const TaskPtr& a, const TaskPtr& b) {
             if (sortByStatus) {
@@ -246,7 +266,6 @@ void MainWindow::OnToggleEnabled() {
 
     auto tasks = taskManager->GetAllTasks();
 
-    // Применяем сортировку
     if (sortByStatus || sortByName) {
         std::stable_sort(tasks.begin(), tasks.end(), [this](const TaskPtr& a, const TaskPtr& b) {
             if (sortByStatus) {
@@ -302,31 +321,33 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM
 
     switch (uMsg) {
 
-        // ← ДОБАВЛЕНО: Обработка изменения размера окна
     case WM_SIZE:
         if (wnd && wnd->hList) {
             RECT rc;
             GetClientRect(hWnd, &rc);
-
-            // Растягиваем ListView по размеру окна
             MoveWindow(wnd->hList, 10, 80, rc.right - 20, rc.bottom - 90, TRUE);
         }
         break;
 
     case WM_COMMAND:
+        // ← ДОБАВЛЕНО: Обработка меню "About"
+        if (LOWORD(wParam) == IDM_ABOUT) {
+            wnd->ShowAboutDialog();
+            break;
+        }
+
         switch (LOWORD(wParam)) {
         case 2001: wnd->OnNew(); break;
         case 2002: wnd->OnEdit(); break;
         case 2003: wnd->OnDelete(); break;
         case 2004: wnd->OnRun(); break;
         case 2005:
-            // ← Кнопка Refresh работает корректно - обновляет список
             wnd->RefreshList();
             g_Logger.Log(LogLevel::Info, L"MainWindow", L"Manual refresh triggered");
             break;
         case 2006: wnd->OnToggleEnabled(); break;
 
-        case 2007: // Sort by Name
+        case 2007:
             if (HIWORD(wParam) == BN_CLICKED) {
                 wnd->sortByName = (IsDlgButtonChecked(hWnd, 2007) == BST_CHECKED);
                 wnd->RefreshList();
@@ -335,7 +356,7 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM
             }
             break;
 
-        case 2008: // Sort by Status
+        case 2008:
             if (HIWORD(wParam) == BN_CLICKED) {
                 wnd->sortByStatus = (IsDlgButtonChecked(hWnd, 2008) == BST_CHECKED);
                 wnd->RefreshList();
@@ -347,7 +368,6 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM
         break;
 
     case WM_USER + 100:
-        // Обновление после фонового запуска задачи
         wnd->RefreshList();
         break;
 

@@ -103,8 +103,21 @@ void TaskManager::CalculateNextRun(const TaskPtr& task) {
         }
         else {
             task->nextRunTime = task->runOnceTime;
+
+            // ← ДОБАВЛЕНО: Если время уже прошло
             if (task->nextRunTime <= now) {
-                task->nextRunTime = task->runIfMissed ? now : system_clock::time_point{};
+                if (task->runIfMissed) {
+                    // Выполнить сейчас, но больше не запускать
+                    task->nextRunTime = now;
+                }
+                else {
+                    // Пропустить выполнение
+                    task->nextRunTime = {};
+                }
+
+                // ← КРИТИЧНО: После выполнения ONCE должен быть disabled
+                // Это произойдет в Scheduler после JobExecutor::RunTask
+                // Здесь только обнуляем nextRunTime чтобы не запускался повторно
             }
         }
         break;
@@ -123,7 +136,7 @@ void TaskManager::CalculateNextRun(const TaskPtr& task) {
 
         local.tm_hour = task->dailyHour;
         local.tm_min = task->dailyMinute;
-        local.tm_sec = task->dailySecond;  // ← ИСПРАВЛЕНО: было = 0
+        local.tm_sec = task->dailySecond;
 
         time_t target = mktime(&local);
         auto tp = system_clock::from_time_t(target);
@@ -139,7 +152,7 @@ void TaskManager::CalculateNextRun(const TaskPtr& task) {
         tm local{};
         localtime_s(&local, &tt);
 
-        int today = local.tm_wday; // 0 = Sunday
+        int today = local.tm_wday;
 
         for (int offset = 0; offset < 7; ++offset) {
             int d = (today + offset) % 7;
@@ -148,7 +161,7 @@ void TaskManager::CalculateNextRun(const TaskPtr& task) {
                 cand.tm_mday += offset;
                 cand.tm_hour = task->weeklyHour;
                 cand.tm_min = task->weeklyMinute;
-                cand.tm_sec = task->weeklySecond;  // ← ИСПРАВЛЕНО: было = 0
+                cand.tm_sec = task->weeklySecond;
 
                 time_t ct = mktime(&cand);
                 auto tp = system_clock::from_time_t(ct);

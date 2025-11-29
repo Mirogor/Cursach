@@ -30,6 +30,11 @@ bool Persistence::Save(const std::vector<TaskPtr>& tasks) {
         ofs << L"      \"workingDirectory\": \"" << util::EscapeJSON(t->workingDirectory) << L"\",\n";
         ofs << L"      \"enabled\": " << (t->enabled ? L"true" : L"false") << L",\n";
         ofs << L"      \"triggerType\": " << (int)t->triggerType << L",\n";
+
+        // ← ДОБАВЛЕНО: Сохраняем runOnceTime как timestamp
+        long long onceTimestamp = t->runOnceTime.time_since_epoch().count();
+        ofs << L"      \"runOnceTime\": " << onceTimestamp << L",\n";
+
         ofs << L"      \"intervalMinutes\": " << t->intervalMinutes << L",\n";
         ofs << L"      \"dailyHour\": " << (int)t->dailyHour << L",\n";
         ofs << L"      \"dailyMinute\": " << (int)t->dailyMinute << L",\n";
@@ -108,7 +113,6 @@ std::vector<TaskPtr> Persistence::Load() {
 
         std::wstring block = content.substr(start, i - start + 1);
 
-        // ← ИСПРАВЛЕНО: Теперь применяем UnescapeJSON к строковым полям
         auto getString = [&](const std::wstring& key)->std::wstring {
             size_t p = block.find(L"\"" + key + L"\"");
             if (p == std::wstring::npos) return L"";
@@ -116,7 +120,7 @@ std::vector<TaskPtr> Persistence::Load() {
             size_t q1 = block.find(L"\"", colon);
             size_t q2 = block.find(L"\"", q1 + 1);
             std::wstring raw = block.substr(q1 + 1, q2 - q1 - 1);
-            return util::UnescapeJSON(raw);  // ← ДОБАВЛЕНО: разэкранирование
+            return util::UnescapeJSON(raw);
             };
 
         auto getInt = [&](const std::wstring& key)->long long {
@@ -124,6 +128,7 @@ std::vector<TaskPtr> Persistence::Load() {
             if (p == std::wstring::npos) return 0;
             size_t colon = block.find(L":", p);
             size_t s = block.find_first_of(L"-0123456789", colon);
+            if (s == std::wstring::npos) return 0;
             size_t e = s;
             while (e < block.size() && (iswdigit(block[e]) || block[e] == L'-')) ++e;
             return std::stoll(block.substr(s, e - s));
@@ -145,6 +150,13 @@ std::vector<TaskPtr> Persistence::Load() {
         }
 
         t->triggerType = (TriggerType)getInt(L"triggerType");
+
+        // ← ДОБАВЛЕНО: Загружаем runOnceTime
+        long long onceTimestamp = getInt(L"runOnceTime");
+        t->runOnceTime = std::chrono::system_clock::time_point(
+            std::chrono::system_clock::duration(onceTimestamp)
+        );
+
         t->intervalMinutes = (uint32_t)getInt(L"intervalMinutes");
         t->dailyHour = (uint8_t)getInt(L"dailyHour");
         t->dailyMinute = (uint8_t)getInt(L"dailyMinute");

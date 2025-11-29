@@ -14,7 +14,7 @@ private:
     HWND hList = nullptr;
     HWND hCheckSortName = nullptr;
     HWND hCheckSortStatus = nullptr;
-    HWND hStatLabel = nullptr;  // ← ДОБАВЛЕНО: метка статистики
+    HWND hStatLabel = nullptr;
     TaskManager* taskManager;
     Scheduler* scheduler;
 
@@ -23,7 +23,8 @@ private:
 
     void CreateControls();
     void RefreshList();
-    void UpdateStatistics();  // ← ДОБАВЛЕНО
+    void UpdateStatistics();
+    void ShowAboutDialog();  // ← ДОБАВЛЕНО
     void OnNew();
     void OnEdit();
     void OnDelete();

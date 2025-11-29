@@ -22,15 +22,15 @@ struct Task {
     TriggerType triggerType = TriggerType::DAILY;
 
     // Trigger params
-    // for ONCE:
+    // for ONCE: (используется полная дата-время)
     std::chrono::system_clock::time_point runOnceTime{};
     // for INTERVAL:
     uint32_t intervalMinutes = 60;
     // for DAILY:
-    uint8_t dailyHour = 12, dailyMinute = 0, dailySecond = 0;  // ← ДОБАВЛЕНО dailySecond
+    uint8_t dailyHour = 12, dailyMinute = 0, dailySecond = 0;
     // for WEEKLY:
     std::bitset<7> weeklyDays; // 0 = Sun, 1 = Mon, ..., 6 = Sat
-    uint8_t weeklyHour = 12, weeklyMinute = 0, weeklySecond = 0;  // ← ДОБАВЛЕНО weeklySecond
+    uint8_t weeklyHour = 12, weeklyMinute = 0, weeklySecond = 0;
 
     bool runIfMissed = true;
 

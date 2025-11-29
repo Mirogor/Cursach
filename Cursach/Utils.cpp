@@ -35,7 +35,7 @@ namespace util {
     }
 
     std::wstring TimePointToWString(const std::chrono::system_clock::time_point& tp) {
-        if (tp.time_since_epoch().count() == 0) return L"Никогда";
+        if (tp.time_since_epoch().count() == 0) return L"Never";
         std::time_t t = std::chrono::system_clock::to_time_t(tp);
         std::tm tm;
         localtime_s(&tm, &t);

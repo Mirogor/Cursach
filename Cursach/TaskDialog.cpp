@@ -25,8 +25,16 @@ static void UpdateTriggerUI(HWND hDlg)
 {
     int t = ComboBox_GetCurSel(GetDlgItem(hDlg, IDC_TASK_TRIGGER));
 
+    // Скрываем ВСЕ контролы
     ShowCtrl(hDlg, IDC_TASK_INTERVAL, false);
+    ShowCtrl(hDlg, IDC_INTERVAL_LABEL, false);  // ← ДОБАВЛЕНО: скрываем метку
+
     ShowCtrl(hDlg, IDC_TASK_TIME, false);
+
+    ShowCtrl(hDlg, IDC_TASK_ONCE_DATE, false);
+    ShowCtrl(hDlg, IDC_TASK_ONCE_TIME, false);
+    ShowCtrl(hDlg, IDC_ONCE_DATE_LABEL, false);  // ← ДОБАВЛЕНО
+    ShowCtrl(hDlg, IDC_ONCE_TIME_LABEL, false);  // ← ДОБАВЛЕНО
 
     ShowCtrl(hDlg, IDC_DAY_MON, false);
     ShowCtrl(hDlg, IDC_DAY_TUE, false);
@@ -38,8 +46,16 @@ static void UpdateTriggerUI(HWND hDlg)
 
     switch (t)
     {
+    case (int)TriggerType::ONCE:
+        ShowCtrl(hDlg, IDC_TASK_ONCE_DATE, true);
+        ShowCtrl(hDlg, IDC_TASK_ONCE_TIME, true);
+        ShowCtrl(hDlg, IDC_ONCE_DATE_LABEL, true);  // ← ДОБАВЛЕНО
+        ShowCtrl(hDlg, IDC_ONCE_TIME_LABEL, true);  // ← ДОБАВЛЕНО
+        break;
+
     case (int)TriggerType::INTERVAL:
         ShowCtrl(hDlg, IDC_TASK_INTERVAL, true);
+        ShowCtrl(hDlg, IDC_INTERVAL_LABEL, true);  // ← ДОБАВЛЕНО
         break;
 
     case (int)TriggerType::DAILY:
@@ -59,15 +75,62 @@ static void UpdateTriggerUI(HWND hDlg)
     }
 }
 
+static void LoadOnceDateTime(HWND hDlg)
+{
+    SYSTEMTIME st{};
+
+    if (g_task->runOnceTime.time_since_epoch().count() == 0) {
+        GetLocalTime(&st);
+        st.wHour = (st.wHour + 1) % 24;
+    }
+    else {
+        time_t tt = std::chrono::system_clock::to_time_t(g_task->runOnceTime);
+        tm local{};
+        localtime_s(&local, &tt);
+
+        st.wYear = local.tm_year + 1900;
+        st.wMonth = local.tm_mon + 1;
+        st.wDay = local.tm_mday;
+        st.wHour = local.tm_hour;
+        st.wMinute = local.tm_min;
+        st.wSecond = local.tm_sec;
+    }
+
+    DateTime_SetSystemtime(GetDlgItem(hDlg, IDC_TASK_ONCE_DATE), GDT_VALID, &st);
+    DateTime_SetSystemtime(GetDlgItem(hDlg, IDC_TASK_ONCE_TIME), GDT_VALID, &st);
+}
+
+static void SaveOnceDateTime(HWND hDlg)
+{
+    SYSTEMTIME stDate{}, stTime{};
+    DateTime_GetSystemtime(GetDlgItem(hDlg, IDC_TASK_ONCE_DATE), &stDate);
+    DateTime_GetSystemtime(GetDlgItem(hDlg, IDC_TASK_ONCE_TIME), &stTime);
+
+    stDate.wHour = stTime.wHour;
+    stDate.wMinute = stTime.wMinute;
+    stDate.wSecond = stTime.wSecond;
+
+    tm local{};
+    local.tm_year = stDate.wYear - 1900;
+    local.tm_mon = stDate.wMonth - 1;
+    local.tm_mday = stDate.wDay;
+    local.tm_hour = stDate.wHour;
+    local.tm_min = stDate.wMinute;
+    local.tm_sec = stDate.wSecond;
+    local.tm_isdst = -1;
+
+    time_t tt = mktime(&local);
+    g_task->runOnceTime = std::chrono::system_clock::from_time_t(tt);
+}
+
 static void LoadTime(HWND hDlg)
 {
     SYSTEMTIME st{};
-    GetLocalTime(&st);  // Заполняем дефолтом
+    GetLocalTime(&st);
 
-    // Устанавливаем время из задачи
     st.wHour = g_task->dailyHour;
     st.wMinute = g_task->dailyMinute;
-    st.wSecond = g_task->dailySecond;  // ← ДОБАВЛЕНО
+    st.wSecond = g_task->dailySecond;
 
     DateTime_SetSystemtime(GetDlgItem(hDlg, IDC_TASK_TIME), GDT_VALID, &st);
 }
@@ -78,12 +141,11 @@ static void SaveTime(HWND hDlg)
     DateTime_GetSystemtime(GetDlgItem(hDlg, IDC_TASK_TIME), &st);
     g_task->dailyHour = st.wHour;
     g_task->dailyMinute = st.wMinute;
-    g_task->dailySecond = st.wSecond;  // ← ДОБАВЛЕНО
+    g_task->dailySecond = st.wSecond;
 
-    // Для Weekly используем те же значения
     g_task->weeklyHour = st.wHour;
     g_task->weeklyMinute = st.wMinute;
-    g_task->weeklySecond = st.wSecond;  // ← ДОБАВЛЕНО
+    g_task->weeklySecond = st.wSecond;
 }
 
 static void LoadWeekdays(HWND hDlg)
@@ -209,10 +271,21 @@ static void SaveTask(HWND hDlg)
     g_task->triggerType =
         (TriggerType)ComboBox_GetCurSel(GetDlgItem(hDlg, IDC_TASK_TRIGGER));
 
-    g_task->intervalMinutes = GetDlgItemInt(hDlg, IDC_TASK_INTERVAL, nullptr, FALSE);
-
-    SaveTime(hDlg);
-    SaveWeekdays(hDlg);
+    switch (g_task->triggerType) {
+    case TriggerType::ONCE:
+        SaveOnceDateTime(hDlg);
+        break;
+    case TriggerType::INTERVAL:
+        g_task->intervalMinutes = GetDlgItemInt(hDlg, IDC_TASK_INTERVAL, nullptr, FALSE);
+        break;
+    case TriggerType::DAILY:
+        SaveTime(hDlg);
+        break;
+    case TriggerType::WEEKLY:
+        SaveTime(hDlg);
+        SaveWeekdays(hDlg);
+        break;
+    }
 }
 
 static HBRUSH hGreen = CreateSolidBrush(RGB(210, 255, 210));
@@ -229,6 +302,7 @@ static INT_PTR CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM w, LPARAM l)
         LoadTaskToDialog(hDlg);
         LoadTime(hDlg);
         LoadWeekdays(hDlg);
+        LoadOnceDateTime(hDlg);
         UpdateTriggerUI(hDlg);
         return TRUE;
 
@@ -286,9 +360,6 @@ static INT_PTR CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM w, LPARAM l)
     return FALSE;
 }
 
-//
-// PUBLIC API
-//
 bool TaskDialog::ShowDialog(HWND parent, TaskPtr& task, bool isNew)
 {
     g_task = isNew ? make_shared<Task>() : task;

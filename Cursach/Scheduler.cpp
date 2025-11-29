@@ -1,11 +1,9 @@
-#include "Scheduler.h"
+﻿#include "Scheduler.h"
 #include "JobExecutor.h"
 #include "Logger.h"
 #include <chrono>
 
-Scheduler::Scheduler(TaskManager* tm) : taskManager(tm) {
-    // taskManager should call Notify via OnChange callback
-}
+Scheduler::Scheduler(TaskManager* tm) : taskManager(tm) {}
 
 Scheduler::~Scheduler() {
     Stop();
@@ -41,16 +39,16 @@ void Scheduler::Notify() {
 void Scheduler::ThreadProc() {
     using namespace std::chrono;
     while (running.load()) {
-        // find next enabled task with earliest nextRunTime
         auto tasks = taskManager->GetAllTasks();
         system_clock::time_point nextDeadline{};
         TaskPtr nextTask = nullptr;
         auto now = system_clock::now();
+
         for (auto& t : tasks) {
             if (!t->enabled) continue;
             if (t->nextRunTime.time_since_epoch().count() == 0) continue;
+
             if (t->nextRunTime <= now) {
-                // ready to run immediately; choose the earliest
                 if (!nextTask || t->nextRunTime < nextTask->nextRunTime) {
                     nextTask = t;
                 }
@@ -68,21 +66,29 @@ void Scheduler::ThreadProc() {
         }
 
         if (nextTask) {
-            // Execute it synchronously in this thread (could offload to thread pool)
             g_Logger.Log(LogLevel::Info, L"Scheduler", L"Executing task: " + nextTask->name);
+
+            // ← ДОБАВЛЕНО: Запоминаем тип триггера ДО выполнения
+            TriggerType triggerType = nextTask->triggerType;
+
             int code = JobExecutor::RunTask(nextTask);
             (void)code;
-            // Recalculate next run
+
+            // ← ДОБАВЛЕНО: Если это был ONCE - отключаем задачу
+            if (triggerType == TriggerType::ONCE) {
+                nextTask->enabled = false;
+                nextTask->nextRunTime = {};
+                g_Logger.Log(LogLevel::Info, L"Scheduler",
+                    L"Task '" + nextTask->name + L"' (ONCE) completed and disabled");
+            }
+
             taskManager->CalculateNextRun(nextTask);
             taskManager->Save();
-            // notify UI via TaskManager.onChange already triggered in Save if desired
-            continue; // look for next task immediately
+            continue;
         }
 
-        // wait until nextDeadline or until notified
         std::unique_lock<std::mutex> lk(mtx);
         if (nextDeadline.time_since_epoch().count() == 0) {
-            // no upcoming task; wait for a notification
             cv.wait_for(lk, seconds(5), [&]() { return !running.load() || needWake; });
         }
         else {
