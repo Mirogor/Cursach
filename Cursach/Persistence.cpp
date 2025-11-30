@@ -31,7 +31,6 @@ bool Persistence::Save(const std::vector<TaskPtr>& tasks) {
         ofs << L"      \"enabled\": " << (t->enabled ? L"true" : L"false") << L",\n";
         ofs << L"      \"triggerType\": " << (int)t->triggerType << L",\n";
 
-        // ← ДОБАВЛЕНО: Сохраняем runOnceTime как timestamp
         long long onceTimestamp = t->runOnceTime.time_since_epoch().count();
         ofs << L"      \"runOnceTime\": " << onceTimestamp << L",\n";
 
@@ -48,7 +47,18 @@ bool Persistence::Save(const std::vector<TaskPtr>& tasks) {
         ofs << L"      \"weeklyHour\": " << (int)t->weeklyHour << L",\n";
         ofs << L"      \"weeklyMinute\": " << (int)t->weeklyMinute << L",\n";
         ofs << L"      \"weeklySecond\": " << (int)t->weeklySecond << L",\n";
-        ofs << L"      \"runIfMissed\": " << (t->runIfMissed ? L"true" : L"false") << L"\n";
+        ofs << L"      \"runIfMissed\": " << (t->runIfMissed ? L"true" : L"false") << L",\n";
+
+        // ← КРИТИЧНО: Проверяем что сохраняется правильно
+        ofs << L"      \"hasExecutionTimeout\": " << (t->hasExecutionTimeout ? L"true" : L"false") << L",\n";
+        ofs << L"      \"executionTimeoutMinutes\": " << t->executionTimeoutMinutes << L"\n";
+
+        // ← ДОБАВЛЕНО: Логируем каждую задачу при сохранении для дебага
+        g_Logger.Log(LogLevel::Debug, L"Persistence",
+            L"Saving task: " + t->name +
+            L" | hasTimeout=" + (t->hasExecutionTimeout ? L"true" : L"false") +
+            L" | timeoutMin=" + std::to_wstring(t->executionTimeoutMinutes));
+
         ofs << L"    }" << (i + 1 < tasks.size() ? L"," : L"") << L"\n";
     }
     ofs << L"  ]\n}\n";
@@ -118,7 +128,9 @@ std::vector<TaskPtr> Persistence::Load() {
             if (p == std::wstring::npos) return L"";
             size_t colon = block.find(L":", p);
             size_t q1 = block.find(L"\"", colon);
+            if (q1 == std::wstring::npos) return L"";
             size_t q2 = block.find(L"\"", q1 + 1);
+            if (q2 == std::wstring::npos) return L"";
             std::wstring raw = block.substr(q1 + 1, q2 - q1 - 1);
             return util::UnescapeJSON(raw);
             };
@@ -131,7 +143,16 @@ std::vector<TaskPtr> Persistence::Load() {
             if (s == std::wstring::npos) return 0;
             size_t e = s;
             while (e < block.size() && (iswdigit(block[e]) || block[e] == L'-')) ++e;
+            if (e == s) return 0;  // ← ДОБАВЛЕНО: защита от пустой строки
             return std::stoll(block.substr(s, e - s));
+            };
+
+        auto getBool = [&](const std::wstring& key)->bool {
+            size_t p = block.find(L"\"" + key + L"\"");
+            if (p == std::wstring::npos) return false;
+            size_t colon = block.find(L":", p);
+            size_t s = block.find_first_not_of(L" \t\r\n", colon + 1);
+            return (s != std::wstring::npos && block.compare(s, 4, L"true") == 0);
             };
 
         TaskPtr t = std::make_shared<Task>();
@@ -142,16 +163,9 @@ std::vector<TaskPtr> Persistence::Load() {
         t->arguments = getString(L"arguments");
         t->workingDirectory = getString(L"workingDirectory");
 
-        size_t pEnabled = block.find(L"\"enabled\"");
-        if (pEnabled != std::wstring::npos) {
-            size_t colon = block.find(L":", pEnabled);
-            size_t s = block.find_first_not_of(L" \t\r\n", colon + 1);
-            t->enabled = (s != std::wstring::npos && block.compare(s, 4, L"true") == 0);
-        }
-
+        t->enabled = getBool(L"enabled");
         t->triggerType = (TriggerType)getInt(L"triggerType");
 
-        // ← ДОБАВЛЕНО: Загружаем runOnceTime
         long long onceTimestamp = getInt(L"runOnceTime");
         t->runOnceTime = std::chrono::system_clock::time_point(
             std::chrono::system_clock::duration(onceTimestamp)
@@ -169,12 +183,24 @@ std::vector<TaskPtr> Persistence::Load() {
         t->weeklyMinute = (uint8_t)getInt(L"weeklyMinute");
         t->weeklySecond = (uint8_t)getInt(L"weeklySecond");
 
-        size_t pRunIf = block.find(L"\"runIfMissed\"");
-        if (pRunIf != std::wstring::npos) {
-            size_t colon = block.find(L":", pRunIf);
-            size_t s = block.find_first_not_of(L" \t\r\n", colon + 1);
-            t->runIfMissed = (s != std::wstring::npos && block.compare(s, 4, L"true") == 0);
+        t->runIfMissed = getBool(L"runIfMissed");
+
+        // ← КРИТИЧНО: Загружаем timeout параметры
+        t->hasExecutionTimeout = getBool(L"hasExecutionTimeout");
+        t->executionTimeoutMinutes = (uint32_t)getInt(L"executionTimeoutMinutes");
+
+        // Защита от нулевого значения
+        if (t->hasExecutionTimeout && t->executionTimeoutMinutes == 0) {
+            g_Logger.Log(LogLevel::Warn, L"Persistence",
+                L"Task '" + t->name + L"' has timeout enabled but minutes=0, setting to default 5");
+            t->executionTimeoutMinutes = 5;
         }
+
+        // ← ДОБАВЛЕНО: Логируем каждую загруженную задачу
+        g_Logger.Log(LogLevel::Debug, L"Persistence",
+            L"Loaded task: " + t->name +
+            L" | hasTimeout=" + (t->hasExecutionTimeout ? L"true" : L"false") +
+            L" | timeoutMin=" + std::to_wstring(t->executionTimeoutMinutes));
 
         if (t->id.empty()) t->id = util::GenerateGUID();
         out.push_back(t);

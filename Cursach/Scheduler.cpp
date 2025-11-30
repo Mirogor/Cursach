@@ -66,20 +66,38 @@ void Scheduler::ThreadProc() {
         }
 
         if (nextTask) {
-            g_Logger.Log(LogLevel::Info, L"Scheduler", L"Executing task: " + nextTask->name);
+            // ← КРИТИЧНО: Логируем ПЕРЕД выполнением для дебага
+            g_Logger.Log(LogLevel::Info, L"Scheduler",
+                L"Executing task: " + nextTask->name +
+                L" | hasTimeout=" + (nextTask->hasExecutionTimeout ? L"YES" : L"NO") +
+                L" | timeoutMin=" + std::to_wstring(nextTask->executionTimeoutMinutes));
 
-            // ← ДОБАВЛЕНО: Запоминаем тип триггера ДО выполнения
             TriggerType triggerType = nextTask->triggerType;
 
-            int code = JobExecutor::RunTask(nextTask);
-            (void)code;
+            // ← ИСПРАВЛЕНО: JobExecutor работает с той же shared_ptr копией
+            int exitCode = JobExecutor::RunTask(nextTask);
 
-            // ← ДОБАВЛЕНО: Если это был ONCE - отключаем задачу
+            g_Logger.Log(LogLevel::Info, L"Scheduler",
+                L"Task completed: " + nextTask->name + L" | exitCode=" + std::to_wstring(exitCode));
+
             if (triggerType == TriggerType::ONCE) {
                 nextTask->enabled = false;
                 nextTask->nextRunTime = {};
-                g_Logger.Log(LogLevel::Info, L"Scheduler",
-                    L"Task '" + nextTask->name + L"' (ONCE) completed and disabled");
+
+                if (exitCode == 999) {
+                    g_Logger.Log(LogLevel::Warn, L"Scheduler",
+                        L"Task '" + nextTask->name + L"' (ONCE) killed by timeout and disabled");
+                }
+                else {
+                    g_Logger.Log(LogLevel::Info, L"Scheduler",
+                        L"Task '" + nextTask->name + L"' (ONCE) completed and disabled");
+                }
+            }
+            else {
+                if (exitCode == 999) {
+                    g_Logger.Log(LogLevel::Warn, L"Scheduler",
+                        L"Task '" + nextTask->name + L"' killed by timeout (will run again next cycle)");
+                }
             }
 
             taskManager->CalculateNextRun(nextTask);

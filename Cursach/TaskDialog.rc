@@ -2,7 +2,7 @@
 #include <windows.h>
 #include <commctrl.h>
 
-IDD_TASK_DIALOG DIALOGEX 0, 0, 380, 200
+IDD_TASK_DIALOG DIALOGEX 0, 0, 380, 220
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Task Properties"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
@@ -17,7 +17,7 @@ BEGIN
     LTEXT           "Trigger:", -1, 10, 55, 60, 14
     COMBOBOX        IDC_TASK_TRIGGER, 80, 53, 120, 60, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
 
-    // ← ONCE контролы (с метками)
+    // ONCE контролы
     LTEXT           "Date:", IDC_ONCE_DATE_LABEL, 10, 85, 60, 14
     CONTROL         "", IDC_TASK_ONCE_DATE, DATETIMEPICK_CLASS, 
                     DTS_LONGDATEFORMAT | WS_TABSTOP, 
@@ -28,16 +28,16 @@ BEGIN
                     DTS_TIMEFORMAT | WS_TABSTOP, 
                     80, 103, 100, 14
 
-    // ← INTERVAL контролы (с ID для метки)
+    // INTERVAL контролы
     LTEXT           "Interval (minutes):", IDC_INTERVAL_LABEL, 10, 85, 100, 14
     EDITTEXT        IDC_TASK_INTERVAL, 120, 83, 60, 14, ES_NUMBER
 
-    // ← DAILY/WEEKLY Time
+    // DAILY/WEEKLY Time
     CONTROL         "", IDC_TASK_TIME, DATETIMEPICK_CLASS, 
                     DTS_TIMEFORMAT | WS_TABSTOP, 
                     10, 85, 120, 14
 
-    // ← WEEKLY Days (ниже времени)
+    // WEEKLY Days
     AUTOCHECKBOX    "Mon", IDC_DAY_MON, 10, 110, 50, 14
     AUTOCHECKBOX    "Tue", IDC_DAY_TUE, 70, 110, 50, 14
     AUTOCHECKBOX    "Wed", IDC_DAY_WED, 130, 110, 50, 14
@@ -46,6 +46,12 @@ BEGIN
     AUTOCHECKBOX    "Sat", IDC_DAY_SAT, 310, 110, 50, 14
     AUTOCHECKBOX    "Sun", IDC_DAY_SUN, 10, 130, 50, 14
 
-    DEFPUSHBUTTON   "OK", IDOK, 220, 170, 70, 20
-    PUSHBUTTON      "Cancel", IDCANCEL, 300, 170, 70, 20
+    // ← ДОБАВЛЕНО: Execution Timeout (внизу, всегда видно)
+    GROUPBOX        "Execution Limit", -1, 10, 150, 360, 35
+    AUTOCHECKBOX    "Limit execution time to", IDC_TIMEOUT_CHECK, 20, 165, 110, 14
+    EDITTEXT        IDC_TIMEOUT_MINUTES, 135, 163, 40, 14, ES_NUMBER
+    LTEXT           "minutes", IDC_TIMEOUT_LABEL, 180, 165, 40, 14
+
+    DEFPUSHBUTTON   "OK", IDOK, 220, 195, 70, 20
+    PUSHBUTTON      "Cancel", IDCANCEL, 300, 195, 70, 20
 END

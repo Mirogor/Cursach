@@ -11,7 +11,7 @@
 #define IDC_TASK_TIME        506
 #define IDC_TASK_ONCE_DATE   507
 #define IDC_TASK_ONCE_TIME   508
-#define IDC_INTERVAL_LABEL   509  // ← ДОБАВЛЕНО: ID для статического текста "Interval (minutes):"
+#define IDC_INTERVAL_LABEL   509
 
 // Weekdays
 #define IDC_DAY_MON          510
@@ -23,6 +23,11 @@
 #define IDC_DAY_SUN          516
 
 // Labels для ONCE
-#define IDC_ONCE_DATE_LABEL  520  // ← ДОБАВЛЕНО
-#define IDC_ONCE_TIME_LABEL  521  // ← ДОБАВЛЕНО
+#define IDC_ONCE_DATE_LABEL  520
+#define IDC_ONCE_TIME_LABEL  521
+
+// ← ДОБАВЛЕНО: Execution timeout
+#define IDC_TIMEOUT_CHECK    530  // Checkbox "Limit execution time"
+#define IDC_TIMEOUT_MINUTES  531  // EditText для минут
+#define IDC_TIMEOUT_LABEL    532  // Статическая метка "minutes"
 

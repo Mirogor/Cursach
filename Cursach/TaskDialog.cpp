@@ -25,16 +25,15 @@ static void UpdateTriggerUI(HWND hDlg)
 {
     int t = ComboBox_GetCurSel(GetDlgItem(hDlg, IDC_TASK_TRIGGER));
 
-    // Скрываем ВСЕ контролы
     ShowCtrl(hDlg, IDC_TASK_INTERVAL, false);
-    ShowCtrl(hDlg, IDC_INTERVAL_LABEL, false);  // ← ДОБАВЛЕНО: скрываем метку
+    ShowCtrl(hDlg, IDC_INTERVAL_LABEL, false);
 
     ShowCtrl(hDlg, IDC_TASK_TIME, false);
 
     ShowCtrl(hDlg, IDC_TASK_ONCE_DATE, false);
     ShowCtrl(hDlg, IDC_TASK_ONCE_TIME, false);
-    ShowCtrl(hDlg, IDC_ONCE_DATE_LABEL, false);  // ← ДОБАВЛЕНО
-    ShowCtrl(hDlg, IDC_ONCE_TIME_LABEL, false);  // ← ДОБАВЛЕНО
+    ShowCtrl(hDlg, IDC_ONCE_DATE_LABEL, false);
+    ShowCtrl(hDlg, IDC_ONCE_TIME_LABEL, false);
 
     ShowCtrl(hDlg, IDC_DAY_MON, false);
     ShowCtrl(hDlg, IDC_DAY_TUE, false);
@@ -49,13 +48,13 @@ static void UpdateTriggerUI(HWND hDlg)
     case (int)TriggerType::ONCE:
         ShowCtrl(hDlg, IDC_TASK_ONCE_DATE, true);
         ShowCtrl(hDlg, IDC_TASK_ONCE_TIME, true);
-        ShowCtrl(hDlg, IDC_ONCE_DATE_LABEL, true);  // ← ДОБАВЛЕНО
-        ShowCtrl(hDlg, IDC_ONCE_TIME_LABEL, true);  // ← ДОБАВЛЕНО
+        ShowCtrl(hDlg, IDC_ONCE_DATE_LABEL, true);
+        ShowCtrl(hDlg, IDC_ONCE_TIME_LABEL, true);
         break;
 
     case (int)TriggerType::INTERVAL:
         ShowCtrl(hDlg, IDC_TASK_INTERVAL, true);
-        ShowCtrl(hDlg, IDC_INTERVAL_LABEL, true);  // ← ДОБАВЛЕНО
+        ShowCtrl(hDlg, IDC_INTERVAL_LABEL, true);
         break;
 
     case (int)TriggerType::DAILY:
@@ -73,6 +72,14 @@ static void UpdateTriggerUI(HWND hDlg)
         ShowCtrl(hDlg, IDC_DAY_SUN, true);
         break;
     }
+}
+
+// ← ДОБАВЛЕНО: Обработка состояния timeout контролов
+static void UpdateTimeoutUI(HWND hDlg)
+{
+    BOOL checked = IsDlgButtonChecked(hDlg, IDC_TIMEOUT_CHECK) == BST_CHECKED;
+    EnableWindow(GetDlgItem(hDlg, IDC_TIMEOUT_MINUTES), checked);
+    EnableWindow(GetDlgItem(hDlg, IDC_TIMEOUT_LABEL), checked);
 }
 
 static void LoadOnceDateTime(HWND hDlg)
@@ -183,6 +190,33 @@ static void SaveWeekdays(HWND hDlg)
     save(IDC_DAY_SUN, 0);
 }
 
+// ← ДОБАВЛЕНО: Загрузка timeout настроек
+static void LoadTimeout(HWND hDlg)
+{
+    CheckDlgButton(hDlg, IDC_TIMEOUT_CHECK,
+        g_task->hasExecutionTimeout ? BST_CHECKED : BST_UNCHECKED);
+    SetDlgItemInt(hDlg, IDC_TIMEOUT_MINUTES, g_task->executionTimeoutMinutes, FALSE);
+    UpdateTimeoutUI(hDlg);
+}
+
+// ← ДОБАВЛЕНО: Сохранение timeout настроек
+static void SaveTimeout(HWND hDlg)
+{
+    g_task->hasExecutionTimeout = (IsDlgButtonChecked(hDlg, IDC_TIMEOUT_CHECK) == BST_CHECKED);
+
+    if (g_task->hasExecutionTimeout) {
+        BOOL success = FALSE;
+        UINT minutes = GetDlgItemInt(hDlg, IDC_TIMEOUT_MINUTES, &success, FALSE);
+
+        if (success && minutes > 0) {
+            g_task->executionTimeoutMinutes = minutes;
+        }
+        else {
+            g_task->executionTimeoutMinutes = 5;  // Default fallback
+        }
+    }
+}
+
 static bool ValidateFields(HWND hDlg)
 {
     wchar_t name[256], exe[512];
@@ -205,6 +239,19 @@ static bool ValidateFields(HWND hDlg)
     {
         MessageBoxW(hDlg, L"File does not exist.", L"Error", MB_ICONERROR);
         return false;
+    }
+
+    // ← ДОБАВЛЕНО: Валидация timeout
+    if (IsDlgButtonChecked(hDlg, IDC_TIMEOUT_CHECK) == BST_CHECKED)
+    {
+        BOOL success = FALSE;
+        UINT minutes = GetDlgItemInt(hDlg, IDC_TIMEOUT_MINUTES, &success, FALSE);
+
+        if (!success || minutes == 0)
+        {
+            MessageBoxW(hDlg, L"Timeout must be a positive number.", L"Error", MB_ICONERROR);
+            return false;
+        }
     }
 
     return true;
@@ -286,6 +333,8 @@ static void SaveTask(HWND hDlg)
         SaveWeekdays(hDlg);
         break;
     }
+
+    SaveTimeout(hDlg);  // ← ДОБАВЛЕНО
 }
 
 static HBRUSH hGreen = CreateSolidBrush(RGB(210, 255, 210));
@@ -303,6 +352,7 @@ static INT_PTR CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM w, LPARAM l)
         LoadTime(hDlg);
         LoadWeekdays(hDlg);
         LoadOnceDateTime(hDlg);
+        LoadTimeout(hDlg);  // ← ДОБАВЛЕНО
         UpdateTriggerUI(hDlg);
         return TRUE;
 
@@ -325,6 +375,13 @@ static INT_PTR CALLBACK DlgProc(HWND hDlg, UINT msg, WPARAM w, LPARAM l)
             GetDlgItemTextW(hDlg, IDC_TASK_EXE, exe, 512);
             g_exeValid = filesystem::exists(exe);
             InvalidateRect(hDlg, NULL, TRUE);
+        }
+
+        // ← ДОБАВЛЕНО: Обработка checkbox timeout
+        if (LOWORD(w) == IDC_TIMEOUT_CHECK && HIWORD(w) == BN_CLICKED)
+        {
+            UpdateTimeoutUI(hDlg);
+            return TRUE;
         }
 
         if (LOWORD(w) == IDOK)
