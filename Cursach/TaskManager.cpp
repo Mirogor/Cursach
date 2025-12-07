@@ -104,20 +104,13 @@ void TaskManager::CalculateNextRun(const TaskPtr& task) {
         else {
             task->nextRunTime = task->runOnceTime;
 
-            // ← ДОБАВЛЕНО: Если время уже прошло
             if (task->nextRunTime <= now) {
                 if (task->runIfMissed) {
-                    // Выполнить сейчас, но больше не запускать
                     task->nextRunTime = now;
                 }
                 else {
-                    // Пропустить выполнение
                     task->nextRunTime = {};
                 }
-
-                // ← КРИТИЧНО: После выполнения ONCE должен быть disabled
-                // Это произойдет в Scheduler после JobExecutor::RunTask
-                // Здесь только обнуляем nextRunTime чтобы не запускался повторно
             }
         }
         break;
@@ -152,11 +145,62 @@ void TaskManager::CalculateNextRun(const TaskPtr& task) {
         tm local{};
         localtime_s(&local, &tt);
 
-        int today = local.tm_wday;
+        int today = local.tm_wday;  // 0=Sunday, 1=Monday, ..., 6=Saturday
+        bool found = false;
 
+        g_Logger.Log(LogLevel::Debug, L"TaskManager",
+            L"WEEKLY: Calculating next run for task: " + task->name +
+            L" | Today: " + std::to_wstring(today) +
+            L" | Target time: " + std::to_wstring(task->weeklyHour) + L":" +
+            std::to_wstring(task->weeklyMinute));
+
+        // Проверяем следующие 7 дней (эта неделя)
         for (int offset = 0; offset < 7; ++offset) {
             int d = (today + offset) % 7;
-            if (task->weeklyDays.test(d)) {
+
+            // Пропускаем дни, которые не выбраны
+            if (!task->weeklyDays.test(d)) {
+                continue;
+            }
+
+            // Строим целевое время для этого дня
+            tm cand = local;
+            cand.tm_mday += offset;
+            cand.tm_hour = task->weeklyHour;
+            cand.tm_min = task->weeklyMinute;
+            cand.tm_sec = task->weeklySecond;
+
+            time_t ct = mktime(&cand);  // mktime нормализует дату
+            auto tp = system_clock::from_time_t(ct);
+
+            g_Logger.Log(LogLevel::Debug, L"TaskManager",
+                L"  Checking offset=" + std::to_wstring(offset) +
+                L" | day=" + std::to_wstring(d) +
+                L" | time in future: " + (tp > now ? L"YES" : L"NO"));
+
+            // Берем только если время строго в будущем
+            if (tp > now) {
+                task->nextRunTime = tp;
+                found = true;
+                g_Logger.Log(LogLevel::Info, L"TaskManager",
+                    L"✓ WEEKLY: Found next run in THIS week: " +
+                    util::TimePointToWString(tp));
+                break;
+            }
+        }
+
+        // Если не нашли на этой неделе, ищем на следующей
+        if (!found) {
+            g_Logger.Log(LogLevel::Debug, L"TaskManager",
+                L"WEEKLY: No suitable time this week, checking NEXT week");
+
+            for (int offset = 7; offset < 14; ++offset) {
+                int d = (today + offset) % 7;
+
+                if (!task->weeklyDays.test(d)) {
+                    continue;
+                }
+
                 tm cand = local;
                 cand.tm_mday += offset;
                 cand.tm_hour = task->weeklyHour;
@@ -166,12 +210,22 @@ void TaskManager::CalculateNextRun(const TaskPtr& task) {
                 time_t ct = mktime(&cand);
                 auto tp = system_clock::from_time_t(ct);
 
-                if (tp > now || offset > 0) {
-                    task->nextRunTime = tp;
-                    break;
-                }
+                task->nextRunTime = tp;
+                found = true;
+                g_Logger.Log(LogLevel::Info, L"TaskManager",
+                    L"✓ WEEKLY: Found next run in NEXT week: " +
+                    util::TimePointToWString(tp));
+                break;
             }
         }
+
+        // Если все еще не нашли - ошибка конфигурации (не выбран ни один день)
+        if (!found) {
+            task->nextRunTime = {};
+            g_Logger.Log(LogLevel::Warn, L"TaskManager",
+                L"⚠ WEEKLY: No days selected for task: " + task->name);
+        }
+
         break;
     }
 
